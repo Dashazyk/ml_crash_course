@@ -3,58 +3,81 @@
 Web-service with API
 ----------------------------
 """
+from email import message
 import os
 import unicodedata
 
 
+import pickle
 import numpy as np
 from flask import Flask, render_template, request
 from flask_restful import Resource, Api, reqparse
 
-from src.utils import conf, logger, MessagesDB
+from src.utils import conf, logger, MessagesDB, ML
+
+from catboost import CatBoostClassifier
 
 db = MessagesDB(conf)
 db.init_db()
 
 def load_model(model_path):
-    # ------ YOUR CODE HERE ----------- #
-    # load trained model
+    loaded_model = CatBoostClassifier()
+    loaded_model.load_model(model_path)
 
-    # --------------------------------- #
-    return None
+    logger.info("Loaded model from disk")
+    return loaded_model
+
+def load_vectorizer(vectorizer_path):
+    loaded_vectorizer = pickle.load(open(vectorizer_path))
+
+    logger.info("Loaded vectorizer from disk")
+    return loaded_vectorizer
 
 
 app = Flask(__name__)
 api = Api(app)
 model = load_model(conf.model_path)
-
+vectorizer = load_vectorizer(conf.vectorizer_path)
 
 @app.route('/messages/<string:identifier>')
-def pridict_labell(identifier):
+def predict_label(identifier):
     msg = db.read_message(msg_id=int(identifier))
-    # ------ YOUR CODE HERE ----------- #
+
     # model predict single label
+    pre_proc = ML.preprocessing(np.array( [msg] ))
+    X_test_csr = vectorizer.transform(pre_proc)
+    pred = model.predict(X_test_csr)
+    predicted_label = pred[0]
 
-    predicted_label = 'Error: Model not loaded'
-
-    # --------------------------------- #
     return render_template('page.html', id=identifier, txt=msg['txt'], label=predicted_label)
 
 @app.route('/feed/')
 def feed():
     limit = request.args.get('limit', 10)
     limit = int(limit)
-    # ------ YOUR CODE HERE ----------- #
     # rank all messages and predict
+    msg_ids = db.get_messages_ids(limit)
 
-    predicted_label = 'Error: Model not loaded'
+    messages = []
 
-    # --------------------------------- #
-    recs = [
-        {'msg_id': 1, 'msg_txt': 'example_txt_1'},
-        {'msg_id': 2, 'msg_txt': 'example_txt_2'}
-    ]
-    return render_template('feed.html', recs=recs)
+    for id in msg_ids:
+        msg = db.read_message(msg_id=int(id)) 
+        # model predict single label
+        pre_proc = ML.preprocessing(np.array( [msg] ))
+        X_test_csr = vectorizer.transform(pre_proc)
+        pred = model.predict(X_test_csr)
+        predicted_label = pred[0]
+
+        message = {}
+        message['msg_id'] = id
+        message['msg_txt'] = msg
+        message['msg_pred'] = predicted_label
+
+        messages.append(message)
+
+    sorted_messages = sorted(messages, key=lambda d: d['msg_pred'], reverse = True) 
+
+    return render_template('feed.html', recs=sorted_messages)
 
 class Messages(Resource):
     def __init__(self):

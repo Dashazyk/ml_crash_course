@@ -6,27 +6,13 @@ build-network:
 	docker network create ds_network -d bridge || true
 
 build: build-network
-	docker build \
-        -f ${CURRENT_DIR}/Dockerfile \
-        -t ds-container:dev ${CURRENT_DIR}
+	docker build -f D:\repos\ml_crash_course\Dockerfile -t ds-container:dev D:\repos\ml_crash_course
 
 train:
-	docker run -it --rm --network=ds_network \
-	    -p 8892:8888 \
-		-e CONFIG_PATH="/srv/src/config.yml" \
-	    -v "${CURRENT_DIR}/src:/srv/src" \
-	    -v "${CURRENT_DIR}/data:/srv/data" \
-	    --name ${USER_NAME}_ml_docker \
-	    ds-container:dev train
+	docker run -it --rm --network=ds_network -p 8892:8888 -e CONFIG_PATH="/srv/src/config.yml" -v "D:\repos\ml_crash_course\src:/srv/src" -v "D:\repos\ml_crash_course\data:/srv/data" --name ${USER_NAME}_ml_docker ds-container:dev train
 
 serve:
-	docker run -it --rm --network=ds_network \
-	    -p 5000:5000 \
-		-e CONFIG_PATH="/srv/src/config.yml" \
-	    -v "${CURRENT_DIR}/src:/srv/src" \
-	    -v "${CURRENT_DIR}/data:/srv/data" \
-	    --name ${USER_NAME}_ml_docker \
-	    ds-container:dev serve
+	docker run -it --rm --network=ds_network -p 5000:5000 -e CONFIG_PATH="/srv/src/config.yml" -v "D:\repos\ml_crash_course\src:/srv/src" -v "D:\repos\ml_crash_course\data:/srv/data" --name WIN-SERVER_ml_docker ds-container:dev serve
 
 labelstudio:
 	docker run -it -d --rm --network=ds_network \
@@ -37,12 +23,7 @@ labelstudio:
 	    ds-container:dev labelstudio
 
 notebook:
-	docker run -it -d --rm --network=ds_network \
-	    -p 8888:8888 \
-	    -v "${CURRENT_DIR}/src:/srv/src" \
-	    -v "${CURRENT_DIR}/data:/srv/data" \
-	    --name jupyter_ml \
-	    ds-container:dev notebook
+	docker run -it -d --rm --network=ds_network -p 8888:8888 -v "D:\repos\ml_crash_course\src:/srv/src" -v "D:\repos\ml_crash_course\data:/srv/data" --name jupyter_ml ds-container:dev notebook
 
 load:
 	sudo docker run -it --rm --network=ds_network \

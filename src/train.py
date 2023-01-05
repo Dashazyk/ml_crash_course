@@ -5,14 +5,19 @@ Train model
 """
 
 import os
-from typing import Dict
+
+import pickle
 
 import pandas as pd
+
+import numpy as np
+
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 
-from utils import conf, logger
+from catboost import Pool, CatBoostClassifier
+
+from src.utils import ML
 
 
 if __name__ == '__main__':
@@ -28,22 +33,52 @@ if __name__ == '__main__':
     y_train = train_df['label']
 
     X_test = test_df['msg'].values
-    y_true = test_df['label']
-    # fit 
-    vectorizer = TfidfVectorizer(**conf.tf_idf_params).fit(X_train)
+    y_test = test_df['label']
+
+    # preprocessing
+    X_train = ML.preprocessing(X_train)
+    X_test = ML.preprocessing(X_test)
+
+    # vectorizing
+    vectorizer = TfidfVectorizer(max_df=0.3, min_df=0.01).fit(X_train)
     X_train_csr = vectorizer.transform(X_train)
-    lr = LogisticRegression().fit(X_train_csr, y_train)
+    X_test_csr = vectorizer.transform(X_test)
+
+    # fit 
+    train_pool = Pool(
+    X_train_csr, 
+    y_train
+    )
+    valid_pool = Pool(
+    X_test_csr, 
+    y_test
+    )
+
+    catboost_params = {
+        'iterations': 5000,
+        'learning_rate': 0.01,
+        'eval_metric': 'F1',
+        'task_type': 'GPU',
+        'early_stopping_rounds': 2000,
+        'use_best_model': True,
+        'verbose': 500
+    }
+    model = CatBoostClassifier(**catboost_params)
+    model.fit(train_pool, eval_set=valid_pool)
+
     # predict
     X_test_csr = vectorizer.transform(X_test)
-    y_pred = lr.predict(X_test_csr)
-    cur_score = f1_score(y_true, y_pred)
+    y_pred = model.predict(X_test_csr)
+    f1_score = f1_score(y_test, y_pred)
 
-    logger.info('best_score %.5f', cur_score)
-
-    # ------ YOUR CODE HERE ----------- #
-    # train better model
+    logger.info('best_score %.5f', f1_score)
 
     # safe better model
 
     model_path = conf.model_path
-    # --------------------------------- #
+    vectorizer_path = conf.vectorizer_path
+
+    model.save_model(model_path)
+    pickle.dump(vectorizer, open(vectorizer_path))
+
+    logger.info("Saved model to disk")

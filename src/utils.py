@@ -6,6 +6,11 @@ import pandas as pd
 
 import yaml
 
+from nltk.corpus import stopwords
+from text_preprocessing import to_lower, remove_number, remove_whitespace, preprocess_text, remove_stopword, remove_punctuation, remove_special_character
+
+import numpy as np
+
 if os.getenv("CONFIG_PATH") is None:
     config_path = "config.yml"
 else:
@@ -22,6 +27,7 @@ class Config:
         self.db_messages_table = "raw_rent_messages"
         self.raw_data_file = os.path.join(yml_conf["data_dir"], "labeled_data_corpus.csv")
         self.model_path = os.path.join(yml_conf["data_dir"], yml_conf["model_file_name"])
+        self.vectorizer_path = os.path.join(yml_conf["data_dir"], yml_conf["vectorizer_file_name"])
         self.tf_idf_params = yml_conf["tf_idf_params"]
 
 
@@ -83,7 +89,36 @@ class MessagesDB(DataBase):
 
         return msg
     
-    def get_messages_ids(self):
-        res = [int(i[0]) for i in self.run_sql(f"SELECT msg_id FROM {self.conf.db_messages_table} LIMIT 10000")]
+    def get_messages_ids(self, limit : int):
+        res = [int(i[0]) for i in self.run_sql(f"SELECT msg_id FROM {self.conf.db_messages_table} LIMIT {limit}")]
 
         return res
+
+class ML:
+            
+    def preprocessing(messages : np.ndarray) -> pd.Series:
+        pd_messages = pd.Series(messages)
+        pd_messages = pd_messages.str.lower()
+        pd_messages = pd_messages.dropna()
+
+        preprocess_functions = [to_lower, remove_punctuation, remove_special_character, remove_number, remove_whitespace]
+
+        pd_messages = pd_messages.apply(lambda x: preprocess_text(x, preprocess_functions))
+
+        pd_messages = pd_messages.map(lambda x: bytes(x, 'utf-8').decode('utf-8', 'ignore'))
+
+        english_stopwords = stopwords.words("english")
+        pd_messages = pd_messages.apply(lambda x: remove_stopword(x, english_stopwords))
+
+        russian_stopwords = stopwords.words("russian")
+        pd_messages = pd_messages.apply(lambda x: remove_stopword(x, russian_stopwords))
+
+        greek_stopwords = stopwords.words("greek")
+        pd_messages = pd_messages.apply(lambda x: remove_stopword(x, greek_stopwords))
+
+        turkish_stopwords = stopwords.words("turkish")
+        pd_messages = pd_messages.apply(lambda x: remove_stopword(x, turkish_stopwords))
+
+        pd_messages = pd_messages.str.join(' ')
+
+        return pd_messages
